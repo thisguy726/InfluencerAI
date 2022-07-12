@@ -25,19 +25,15 @@ def send_tweets(consumer_key, consumer_secret, access_token,
     # post regular tweet
     if len(tweetPost) == 1:
         if len(tweetPost[0]['image']) > 0:
-            # post tweet with image
-            media_ids = []
             imgName = tweetPost[0]['image'][0]
             res = api.media_upload(filename=os.path.join(tmpUploadDir, imgName))
-            media_ids.append(res.media_id)
-
+            media_ids = [res.media_id]
             api.update_status(status=tweetPost[0]['text'], media_ids=media_ids)
 
         else:
             # post only tweet
             api.update_status(status=tweetPost[0]['text'])
 
-    # post tweet thread
     elif len(tweetPost) > 1:
         twitterId = None
         for tweet in tweetPost.values():
@@ -52,33 +48,26 @@ def send_tweets(consumer_key, consumer_secret, access_token,
                     print("Added one")
 
                 # post subpost with image
-                if twitterId is not None:
-                    # post with link to previous tweet
-                    twitterId = api.update_status(status=tweet['text'], media_ids=media_ids, in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
-                    twitterId = twitterId.id
-                    print("Tweet + Image Sub")
-
-                # post atarting post with image
-                else:
+                if twitterId is None:
                     twitterId = api.update_status(status=tweet['text'], media_ids=media_ids)
-                    twitterId = twitterId.id
                     print("Tweet + Image")
 
-            # post text tweet
-            else:
-                # post only tweet
-                if twitterId:
-                    # post with link to previous tweet
-                    twitterId = api.update_status(status=tweet['text'], in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
-                    twitterId = twitterId.id
-                    print("Tweet Sub")
                 else:
-                    twitterId = api.update_status(status=tweet['text'])
-                    twitterId = twitterId.id
-                    print("Tweet")
+                    # post with link to previous tweet
+                    twitterId = api.update_status(status=tweet['text'], media_ids=media_ids, in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
+                    print("Tweet + Image Sub")
 
+            elif twitterId:
+                # post with link to previous tweet
+                twitterId = api.update_status(status=tweet['text'], in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
+                print("Tweet Sub")
+            else:
+                twitterId = api.update_status(status=tweet['text'])
+                print("Tweet")
+
+            twitterId = twitterId.id
     #_delete_tmpdirfiles_after_upload()
-    
+
     logging.info('tweet sent')
 
 

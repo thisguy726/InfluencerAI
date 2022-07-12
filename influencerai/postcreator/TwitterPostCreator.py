@@ -41,22 +41,18 @@ def _twitter_char_limit(post):
     for e in emojis:
         post = post.replace(e, ' ')
     # print(emojis, len(post))
-    if len(post) <= 280:
-        return True, len(post)
-    else:
-        return False, len(post)
+    return (True, len(post)) if len(post) <= 280 else (False, len(post))
 
 
 def _preview_tweet(stColumn: st, tweet: string, static_store):
     tweetPostDict = {}
     for i, post in enumerate(tweet.split('\n\n\n')):
-        tweetPostDict[i] = {}
-        tweetPostDict[i]['text'] = emoji.emojize(post, use_aliases=False)
+        tweetPostDict[i] = {'text': emoji.emojize(post, use_aliases=False)}
         isCharLimit, charLen = _twitter_char_limit(post)
         if isCharLimit:
-            stColumn.info("Post "+str(i+1)+" --- Char Length: "+str(charLen))
+            stColumn.info(f"Post {str(i+1)} --- Char Length: {str(charLen)}")
         else:
-            stColumn.error("Post "+str(i+1)+" --- Char Length: "+str(charLen))
+            stColumn.error(f"Post {str(i+1)} --- Char Length: {str(charLen)}")
         for line in post.split('\n'):
             stColumn.markdown(emoji.emojize(line, use_aliases=False), unsafe_allow_html=True)
         selectedImgs = stColumn.multiselect("Select Images", static_store.keys(), key=str(i))
@@ -68,8 +64,7 @@ def _preview_tweet(stColumn: st, tweet: string, static_store):
 
 
 def _load_image(image_file):
-    img = Image.open(image_file, mode='r')
-    return img
+    return Image.open(image_file, mode='r')
 
 
 def _save_uploadedfile(uploadedfile):
@@ -89,7 +84,7 @@ def _delete_tmpdirfiles_after_upload():
         for file in os.listdir(tmpUploadDir):
             os.remove(os.path.join(tmpUploadDir, file))
     except OSError as e:
-        print("Error: %s : %s" % (tmpUploadDir, e.strerror))
+        print(f"Error: {tmpUploadDir} : {e.strerror}")
 
 
 def _post_to_twitter(tweetPost: dict, static_store):
@@ -99,19 +94,15 @@ def _post_to_twitter(tweetPost: dict, static_store):
     # post regular tweet
     if len(tweetPost) == 1:
         if len(tweetPost[0]['image']) > 0:
-            # post tweet with image
-            media_ids = []
             imgName = tweetPost[0]['image'][0]
             res = api.media_upload(filename=os.path.join(tmpUploadDir, imgName))
-            media_ids.append(res.media_id)
-
+            media_ids = [res.media_id]
             api.update_status(status=tweetPost[0]['text'], media_ids=media_ids)
 
         else:
             # post only tweet
             api.update_status(status=tweetPost[0]['text'])
 
-    # post tweet thread
     elif len(tweetPost) > 1:
         twitterId = None
         for tweet in tweetPost.values():
@@ -126,31 +117,24 @@ def _post_to_twitter(tweetPost: dict, static_store):
                     print("Added one")
 
                 # post subpost with image
-                if twitterId is not None:
-                    # post with link to previous tweet
-                    twitterId = api.update_status(status=tweet['text'], media_ids=media_ids, in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
-                    twitterId = twitterId.id
-                    print("Tweet + Image Sub")
-
-                # post atarting post with image
-                else:
+                if twitterId is None:
                     twitterId = api.update_status(status=tweet['text'], media_ids=media_ids)
-                    twitterId = twitterId.id
                     print("Tweet + Image")
 
-            # post text tweet
-            else:
-                # post only tweet
-                if twitterId:
-                    # post with link to previous tweet
-                    twitterId = api.update_status(status=tweet['text'], in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
-                    twitterId = twitterId.id
-                    print("Tweet Sub")
                 else:
-                    twitterId = api.update_status(status=tweet['text'])
-                    twitterId = twitterId.id
-                    print("Tweet")
+                    # post with link to previous tweet
+                    twitterId = api.update_status(status=tweet['text'], media_ids=media_ids, in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
+                    print("Tweet + Image Sub")
 
+            elif twitterId:
+                # post with link to previous tweet
+                twitterId = api.update_status(status=tweet['text'], in_reply_to_status_id=twitterId, auto_populate_reply_metadata=True)
+                print("Tweet Sub")
+            else:
+                twitterId = api.update_status(status=tweet['text'])
+                print("Tweet")
+
+            twitterId = twitterId.id
     _delete_tmpdirfiles_after_upload()
 
 
@@ -160,14 +144,15 @@ def schedule_tweet(schedDate, schedTime, tweet):
         df = pickle.load(tweets)
 
     data = {
-        'sno': len(df)+1,
+        'sno': len(df) + 1,
         'tweet': tweet,
-        'tweet_at': str(schedDate) + ' ' + str(schedTime),
-        'sent': False
+        'tweet_at': f'{str(schedDate)} {str(schedTime)}',
+        'sent': False,
     }
 
+
     df = df.append(data, ignore_index=True)
-    
+
     with open(tweetdf, "wb") as tweets:
         df = pickle.dump(df, tweets)
     st.success('Tweet has been scheduled')
@@ -187,11 +172,9 @@ def twitter_postcreator_view():
     #####################################################################
     # Create sidebar
     st.sidebar.write("Sidbar this is",)
-    search_emoji = st.sidebar.text_input("Search Emojis")
-
-    if search_emoji:
+    if search_emoji := st.sidebar.text_input("Search Emojis"):
         foundEmojis = list(filter(lambda x: x.find(search_emoji.lower()) != -1, emojiDict))
-        foundEmojized = list(lambda x: emojize(x) for x in  foundEmojis)
+        foundEmojized = [lambda x: emojize(x) for x in  foundEmojis]
         st.sidebar.markdown(emojize(' '.join(foundEmojis)))
 
     #####################################################################
@@ -260,7 +243,7 @@ def twitter_postcreator_view():
             _post_to_twitter(tweetPost, static_store)
             leftSuccessPostStat.success("Tweet has been posted")
         except Exception as e:
-            leftSuccessPostStat.error("Post Unsuccessful: "+str(e))
+            leftSuccessPostStat.error(f"Post Unsuccessful: {str(e)}")
 
     if newPost:
         del tweet
